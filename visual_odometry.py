@@ -5,8 +5,23 @@ from ReadCameraModel import ReadCameraModel
 from UndistortImage import UndistortImage
 import os
 import random
+
+
+
+frames=[]
+path='stereo/centre/'
+for frame in os.listdir(path):
+    frames.append(frame)
+    frames.sort()
+
+fx, fy, cx, cy, G_camera_image, LUT= ReadCameraModel('model/')
+
+
+K = np.array([[fx , 0 , cx],[0 , fy , cy],[0 , 0 , 1]]) # Camera Calibration Matrix of the model
 # takes corners of two images and return fundamental metrix
 #when we have features more than 8 we will stack them in A matrix and use svd , Ax=0
+
+
 def fundamentalMatrix(feature1, feature2): 
     A_x = np.empty((8, 9))
 
@@ -23,7 +38,11 @@ def fundamentalMatrix(feature1, feature2):
     s2 = np.array([[s1[0], 0, 0], [0, s1[1], 0], [0, 0, 0]]) #due to noise in the correspondences, 
     #the estimated F matrix can be of rank 3.So, to enfore the rank 2 constraint, the last singular value of the estimated F must be set to zero.
     F = u1 * s2 *v1  
-    return F
+    return F  #7 Dof (defined in original image space)
+
+
+
+
 
 # generates eight random points in frame 1 and 2
 
@@ -57,6 +76,8 @@ def get_eights_points(features1, features2):
     return eight1,eight2
 
     #computes x2.T * F * x1
+
+
 def inlier_threshold(x1,x2,F):
 
     x1_=np.array([x1[0],x1[1],1]).T
@@ -83,7 +104,59 @@ def get_inliers(features1,features2,Fundamental_Matrix):
         finalFund_Matrix = FundMatrix
         inlier1 = temp1
         inlier2 = temp2
-    return inlier1, inlier2
+    return inlier1, inlier2, finalFund_Matrix
+
+
+
+def Essential_Matrix(K,F):
+    E_temp= np.matmul(np.matmul(K.transpose(),F),K)
+    #singular values of E are not necessarily (1,1,0) due to the noise in K. 
+    #This can be corrected by reconstructing it with (1,1,0) singular values,
+    s = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 0]])
+    u, s, v = np.linalg.svd(E_temp, full_matrices=True)
+
+    E_final=np.matmul(np.matmul(u,s),v.transpose())
+    return E_final # 5 Dof (normalized image coordinates)
+
+
+def Camera_Pose(essentialMatrix):
+    u, s, v = np.linalg.svd(essentialMatrix, full_matrices=True)
+    w = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+    
+    R=[]
+    C=[]
+
+    C,append(u[:,3])
+    R1=np.matmul(np.matmul(u,w),v.transpose())
+    R.append(R1)
+
+    C.append((-1)*u[:,3])
+    R2=np.matmul(np.matmul(u,w),v.transpose())
+    R.append(R2)
+
+    C.append(u[:,3])
+    R3=np.matmul(np.matmul(u,w.transpose()),v.transpose())
+    R.append(R3)
+  
+
+    C.append((-1)*u[:,3])
+    R4=np.matmul(np.matmul(u,w.tranpose()),v.tranpose())
+    R.append(R4)
+    for i in range(len(R)):
+        if np.linalg.det(R[i])== -1:
+            R[i]=-R[i]
+            C[i]=-C[i]
+        else:
+            R[i]=R[i]
+            C[i]=C[i]
+
+    
+        
+   
+    
+
+    
+        
 
 
 
@@ -94,13 +167,9 @@ def get_inliers(features1,features2,Fundamental_Matrix):
 
 
 
-frames=[]
-path='stereo/centre/'
-for frame in os.listdir(path):
-    frames.append(frame)
-    frames.sort()
 
-fx, fy, cx, cy, G_camera_image, LUT= ReadCameraModel('model/')
+
+
 
 data_points = []
 for index in range(19, 21):
@@ -168,5 +237,9 @@ for index in range(19, 21):
     f1, f2 =get_eights_points(features1,features2)
 
     Fundamental_Matrix = fundamentalMatrix(f1,f2)
-    Inliers1,Inliers2= get_inliers(features1,features2,Fundamental_Matrix)
-    
+    Inliers1,Inliers2, FinalFund_Matrix= get_inliers(features1,features2,Fundamental_Matrix)
+
+    EssentialMatrix= Essential_Matrix(K,FinalFund_Matrix)
+
+    #Rotational and translational matrices from essential matrix
+    R, T = Camera_Pose(EssentialMatrix)
