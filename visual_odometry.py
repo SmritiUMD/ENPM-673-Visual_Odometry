@@ -109,13 +109,13 @@ def get_inliers(features1,features2,Fundamental_Matrix):
 
 
 def Essential_Matrix(K,F):
-    E_temp= np.matmul(np.matmul(K.transpose(),F),K)
+    E_temp= np.matmul(np.matmul(K.T,F),K)
     #singular values of E are not necessarily (1,1,0) due to the noise in K. 
     #This can be corrected by reconstructing it with (1,1,0) singular values,
     s = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 0]])
     u, s, v = np.linalg.svd(E_temp, full_matrices=True)
 
-    E_final=np.matmul(np.matmul(u,s),v.transpose())
+    E_final=np.matmul(np.matmul(u,s),v)
     return E_final # 5 Dof (normalized image coordinates)
 
 
@@ -127,20 +127,20 @@ def Camera_Pose(essentialMatrix):
     C=[]
 
     C,append(u[:,3])
-    R1=np.matmul(np.matmul(u,w),v.transpose())
+    R1=np.matmul(np.matmul(u,w),v.T)
     R.append(R1)
 
     C.append((-1)*u[:,3])
-    R2=np.matmul(np.matmul(u,w),v.transpose())
+    R2=np.matmul(np.matmul(u,w),v.T)
     R.append(R2)
 
     C.append(u[:,3])
-    R3=np.matmul(np.matmul(u,w.transpose()),v.transpose())
+    R3=np.matmul(np.matmul(u,w.transpose()),v.T)
     R.append(R3)
   
 
     C.append((-1)*u[:,3])
-    R4=np.matmul(np.matmul(u,w.tranpose()),v.tranpose())
+    R4=np.matmul(np.matmul(u,w.tranpose()),v.T)
     R.append(R4)
     for i in range(len(R)):
         if np.linalg.det(R[i])== -1:
